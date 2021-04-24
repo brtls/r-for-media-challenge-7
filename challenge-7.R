@@ -33,12 +33,46 @@ library(plotly)
 library(leaflet)
 library(tidyverse)
 library(sf)
+library(dplyr)
 
 # load data for plot
+stadtteile <- readRDS("data/stadtteile_profil_updated.rds")
 
-# plotly
+# mutating "arbeitslosenanteil_in_percent_dez_2019" from character into numeric
+stadtteile <- stadtteile %>% 
+  mutate(arbeitslosenanteil_in_percent_dez_2019 = as.numeric(arbeitslosenanteil_in_percent_dez_2019))
+
+# plotly, creating scatter plot and rounding the values
+scatterplot <- plot_ly(data = stadtteile, 
+        x = ~anteil_der_bevolkerung_mit_migrations_hintergrund_in_percent,
+        y = ~arbeitslosenanteil_in_percent_dez_2019,
+        type = "scatter", 
+        mode = "markers",
+        text = ~paste("</br> Migrations Anteil: ", round(anteil_der_bevolkerung_mit_migrations_hintergrund_in_percent, digits = 1),
+                      "</br> Arbeitslosen Anteil: ", round(arbeitslosenanteil_in_percent_dez_2019, digits = 1),
+                      "</br> Stadtteil: ", stadtteil), 
+        hoverinfo = "text") %>% 
+  layout(title = "Verhältnis von Arbeitslosen und Menschen mit Migrationshintergrund in Hamburg",
+         xaxis = list(title = "Anteil Migrationshintergrund in %"),
+         yaxis = list(title = "Erwerbslosenanteil in %"))
+
+#liniar model, checking coorelation between bevolkerung mit migrations hintergrund and arbeitslosenanteil
+model <- lm(arbeitslosenanteil_in_percent_dez_2019~anteil_der_bevolkerung_mit_migrations_hintergrund_in_percent, data = stadtteile)
+summary(model)
+# p-value: 2,2e-16 < 0.05 Null-Hyposthese gilt. Es besteht eine Korrelation zwischen dem Anteilmigrationshintergrund und dem Erwerbslosenanteil. 
+# R²: 0.8097, damit ist recht gut, somit ist der Erklärungszusammenhang recht gut gesichert. 
+# Steigt der Anteil der Bevolkerung mit Migrationshintergrund um eine Einheit, ändert sich die Erwerbslosigkeit um 0.136494.
+
+# Saving plot in html format
+htmlwidgets::saveWidget(as_widget(scatterplot), "myfirstplot.html")
 
 # load data for map
+stadtteile_gps <- readRDS("data/stadtteile_wsg84.RDS")
+
+stadtteile_gps <- stadtteile_gps %>% 
+  rename(stadtteil = Stadtteil,
+         bezirk = Bezirk)
+
 
 # join data
 stadtteile <- stadtteile %>% 
@@ -49,15 +83,17 @@ stadtteile <- stadtteile %>%
 bins <- c(0, 2, 4, 6, 8, 10, Inf)
 pal <- colorBin("YlOrRd", domain = stadtteile$arbeitslosenanteil_in_percent_dez_2019, bins = bins)
 
-leaflet() %>% 
-  addProviderTiles() %>% 
-  setView() %>% 
-  addPolygons(data = ,
+hamburg_map <- leaflet() %>% 
+  addProviderTiles(providers$CartoDB.Voyager) %>% 
+  setView(lng = 9.993682, lat = 53.551086, zoom = 10) %>% 
+  addPolygons(data = stadtteile,
               fillColor = ~pal(arbeitslosenanteil_in_percent_dez_2019),
-              weight = ,
-              opacity = ,
-              color = ,
-              fillOpacity = )
+              weight = 1,
+              opacity = 1,
+              color = "white",
+              fillOpacity = 0.75)
 
+# Export to html format
+htmlwidgets::saveWidget(as_widget(hamburg_map), "myfirstmap.html")
 
 
